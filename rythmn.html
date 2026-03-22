@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Rhythm Lab - 16分全組合版</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        :root { --primary: #00E676; --accent: #FFD600; --bg: #121212; --text: #eee; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; }
+        .controls { background: #222; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #333; }
+        .staff-container { width: 100%; overflow-x: auto; background: #1a1a1a; padding: 20px 0; border-y: 2px solid #444; white-space: nowrap; }
+        .staff-line { display: inline-flex; }
+        .measure-segment { display: flex; flex-direction: column; align-items: center; width: 140px; border-right: 1px solid #333; }
+        .measure-segment.is-first { border-left: 4px solid var(--accent); }
+        .note-display { font-size: 1.8rem; height: 60px; line-height: 60px; color: #666; transition: 0.1s; font-family: serif; }
+        .active .note-display { color: var(--primary); transform: scale(1.1); text-shadow: 0 0 10px var(--primary); }
+        .active.is-first .note-display { color: var(--accent); }
+        select { background: #333; color: #eee; border: 1px solid #555; font-size: 11px; width: 92%; padding: 5px; border-radius: 4px; }
+        .btn-group { display: flex; gap: 8px; margin-top: 10px; }
+        button { flex: 1; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
+        #playBtn { background: var(--primary); color: #000; }
+        #randomBtn { background: #444; color: white; }
+    </style>
+</head>
+<body>
+
+<div style="text-align:center; margin-bottom:10px;">
+    <h3 style="color:var(--primary); margin:5px;">16th Note Explorer</h3>
+</div>
+
+<div class="controls">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <span>BPM <input type="number" id="bpm" value="80" style="width:45px; background:#000; color:#fff; border:none;"></span>
+        <label style="font-size:12px;"><input type="checkbox" id="bgDrum" checked> 背景8分</label>
+    </div>
+    <input type="range" id="bgVolume" min="-50" max="-10" value="-30" style="width:100%; accent-color:var(--primary);">
+    <div class="btn-group">
+        <button id="randomBtn">隨機生成</button>
+        <button id="playBtn">PLAY</button>
+    </div>
+</div>
+
+<div class="staff-container">
+    <div id="staffLine" class="staff-line"></div>
+</div>
+
+<script>
+    const mainSynth = new Tone.MembraneSynth().toDestination();
+    const hihat = new Tone.MetalSynth({ envelope: { decay: 0.05 }, volume: -30 }).toDestination();
+
+    // 擴充後的 16 分音符全家桶
+    const patterns = [
+        { id: '4n', name: '四分音符 (1)', icon: '♩', notes: ['4n'] },
+        { id: '8n2', name: '八分音符 (1-3)', icon: '♫', notes: ['8n', '8n'] },
+        { id: '16n4', name: '16分 (1-2-3-4)', icon: '♬♬', notes: ['16n', '16n', '16n', '16n'] },
+        // 16分三連音組合 (常見切分)
+        { id: '16_16_8', name: '前快後慢 (1-2-3)', icon: '♬𝅘𝅥𝅮', notes: ['16n', '16n', '8n'] },
+        { id: '8_16_16', name: '前慢後快 (1-3-4)', icon: '𝅘𝅥𝅮♬', notes: ['8n', '16n', '16n'] },
+        { id: '16_8_16', name: '中切分 (1-2-4)', icon: '𝅘𝅥𝅮𝅘𝅥𝅘𝅥𝅮', notes: ['16n', '8n', '16n'] },
+        // 附點系列
+        { id: 'dot8_16', name: '前附點 (1...4)', icon: '𝅘𝅥. 𝅘𝅥𝅮', notes: ['8n.', '16n'] },
+        { id: '16_dot8', name: '後附點 (1-2...)', icon: '𝅘𝅥𝅮 𝅘𝅥.', notes: ['16n', '8n.'] },
+        // 單點 16 分 (挑戰級)
+        { id: '16_rest', name: '只打第 2 點', icon: '· 𝅘𝅥𝅮 · ·', notes: [null, '16n', '16n', '8n'] },
+        { id: 'rest_16', name: '只打第 4 點', icon: '· · · 𝅘𝅥𝅮', notes: ['8n', '16n', '16n'] },
+        // 其他
+        { id: '3t', name: '三連音', icon: '𝅘𝅥𝅮𝅘𝅥𝅮𝅘𝅥𝅮', notes: ['8t', '8t', '8t'] },
+        { id: 'rest', name: '全拍休止', icon: '𝄽', notes: [] }
+    ];
+
+    let isPlaying = false;
+    const staffLine = document.getElementById('staffLine');
+
+    for (let i = 0; i < 8; i++) {
+        const seg = document.createElement('div');
+        seg.className = 'measure-segment' + (i === 0 ? ' is-first' : '');
+        seg.id = `seg-${i}`;
+        seg.innerHTML = `<div style="font-size:9px; color:#555;">${i===0?'DOWN':'B'+(i+1)}</div><div class="note-display" id="view-${i}"></div><select id="sel-${i}"></select>`;
+        staffLine.appendChild(seg);
+        const sel = document.getElementById(`sel-${i}`);
+        patterns.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.innerText = p.name;
+            sel.appendChild(opt);
+        });
+        sel.onchange = () => updateNote(i);
+    }
+
+    function updateNote(index) {
+        const val = document.getElementById(`sel-${index}`).value;
+        document.getElementById(`view-${index}`).innerText = patterns.find(x => x.id === val).icon;
+    }
+
+    document.getElementById('bgVolume').oninput = (e) => hihat.volume.value = e.target.value;
+
+    document.getElementById('randomBtn').onclick = () => {
+        for (let i = 0; i < 8; i++) {
+            document.getElementById(`sel-${i}`).value = patterns[Math.floor(Math.random() * patterns.length)].id;
+            updateNote(i);
+        }
+    };
+
+    async function togglePlay() {
+        await Tone.start();
+        if (isPlaying) {
+            Tone.Transport.stop();
+            Tone.Transport.cancel();
+            document.querySelectorAll('.measure-segment').forEach(s => s.classList.remove('active'));
+            document.getElementById('playBtn').innerText = "PLAY";
+            isPlaying = false;
+        } else {
+            Tone.Transport.bpm.value = document.getElementById('bpm').value;
+            let timeCursor = 0;
+
+            for (let i = 0; i < 8; i++) {
+                const p = patterns.find(x => x.id === document.getElementById(`sel-${i}`).value);
+                const start = timeCursor;
+                const pitch = (i === 0) ? "C3" : "C2";
+
+                Tone.Transport.schedule((time) => {
+                    Tone.Draw.schedule(() => {
+                        document.querySelectorAll('.measure-segment').forEach(s => s.classList.remove('active'));
+                        document.getElementById(`seg-${i}`).classList.add('active');
+                    }, time);
+                }, start);
+
+                if (document.getElementById('bgDrum').checked) {
+                    Tone.Transport.schedule((t) => hihat.triggerAttackRelease("32n", t), start);
+                    Tone.Transport.schedule((t) => hihat.triggerAttackRelease("32n", t), start + Tone.Time('8n').toSeconds());
+                }
+
+                if (p.id === 'rest') {
+                    timeCursor += Tone.Time('4n').toSeconds();
+                } else if (p.id === '16_rest') {
+                    // 專門處理「只打第 2 點」：空1/16 -> 響1/16 -> 剩餘
+                    timeCursor += Tone.Time('16n').toSeconds();
+                    Tone.Transport.schedule((t) => mainSynth.triggerAttackRelease(pitch, "32n", t), timeCursor);
+                    timeCursor += Tone.Time('16n').toSeconds() + Tone.Time('8n').toSeconds();
+                } else if (p.id === 'rest_16') {
+                    // 專門處理「只打第 4 點」：前3個16分音符長度不響
+                    timeCursor += Tone.Time('8n.').toSeconds();
+                    Tone.Transport.schedule((t) => mainSynth.triggerAttackRelease(pitch, "32n", t), timeCursor);
+                    timeCursor += Tone.Time('16n').toSeconds();
+                } else {
+                    p.notes.forEach((note, idx) => {
+                        if (note) {
+                            Tone.Transport.schedule((t) => mainSynth.triggerAttackRelease((idx===0?pitch:"C2"), "32n", t), timeCursor);
+                            timeCursor += Tone.Time(note).toSeconds();
+                        } else {
+                            timeCursor += Tone.Time('8n').toSeconds(); // 處理 back 8n 情況
+                        }
+                    });
+                }
+            }
+            Tone.Transport.loop = true;
+            Tone.Transport.loopEnd = timeCursor;
+            Tone.Transport.start();
+            document.getElementById('playBtn').innerText = "STOP";
+            isPlaying = true;
+        }
+    }
+
+    document.getElementById('playBtn').onclick = togglePlay;
+    document.getElementById('randomBtn').click();
+</script>
+</body>
+</html>
