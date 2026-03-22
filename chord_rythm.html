@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Strumming Pro - 背景音版</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        :root { --down: #FF5252; --up: #448AFF; --bg: #121212; --card: #1E1E1E; --primary: #00E676; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: white; margin: 0; padding: 15px; text-align: center; }
+        
+        .chord-display { font-size: 3.5rem; font-weight: bold; color: #FFD600; margin: 10px 0; }
+        
+        .strum-container { 
+            display: flex; justify-content: center; gap: 5px; 
+            background: var(--card); padding: 25px 5px; border-radius: 15px;
+            margin-bottom: 20px; border: 1px solid #333;
+        }
+        .strum-unit { flex: 1; display: flex; flex-direction: column; align-items: center; opacity: 0.3; transition: 0.1s; min-width: 35px; }
+        .strum-unit.active { opacity: 1; transform: translateY(-5px); background: rgba(255,255,255,0.05); border-radius: 8px; }
+        
+        .symbol { font-size: 2.2rem; font-weight: bold; height: 45px; margin-bottom: 5px; }
+        .down { color: var(--down); } 
+        .up { color: var(--up); }     
+        .rest { color: #444; }
+
+        .controls { background: #252525; padding: 15px; border-radius: 12px; }
+        .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-size: 14px; }
+        input[type="range"] { flex: 1; margin-left: 15px; accent-color: var(--primary); }
+        
+        button { 
+            width: 100%; padding: 15px; border-radius: 10px; border: none; 
+            font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-bottom: 10px;
+        }
+        #playBtn { background: var(--primary); color: black; }
+        #randomBtn { background: #444; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="chord-display" id="currentChord">C</div>
+
+<div class="strum-container" id="strumBar"></div>
+
+<div class="controls">
+    <div class="row">
+        <span>BPM: <b id="bpmVal">80</b></span>
+        <input type="range" id="bpm" min="40" max="150" value="80">
+    </div>
+    <div class="row">
+        <span>背景 8 分音量</span>
+        <input type="range" id="bgVol" min="-50" max="-10" value="-30">
+    </div>
+    <button id="randomBtn">隨機新節奏</button>
+    <button id="playBtn">START</button>
+</div>
+
+<div style="margin-top: 20px; color: #888; font-size: 0.85rem;">
+    ㄇ = 下刷 | V = 上刷 | × = 空刷 (手動弦不響)
+</div>
+
+<script>
+    // 刷奏音色 (Noise)
+    const strumSound = new Tone.NoiseSynth({
+        noise: { type: "white" },
+        envelope: { attack: 0.005, decay: 0.08, sustain: 0 }
+    }).toDestination();
+
+    // 背景 8 分音色 (Metal)
+    const bgMetronome = new Tone.MetalSynth({
+        envelope: { attack: 0.001, decay: 0.02, release: 0.02 },
+        volume: -30
+    }).toDestination();
+
+    const chords = ["C", "G", "Am", "F", "D", "Em"];
+    let isPlaying = false;
+    let pattern = [];
+
+    function init() {
+        const bar = document.getElementById('strumBar');
+        bar.innerHTML = '';
+        pattern = [];
+        for (let i = 0; i < 8; i++) {
+            const isDownPos = i % 2 === 0;
+            const type = Math.random() > 0.25 ? (isDownPos ? 'down' : 'up') : 'rest';
+            pattern.push(type);
+
+            const div = document.createElement('div');
+            div.className = 'strum-unit';
+            div.id = `u-${i}`;
+            let sym = type === 'down' ? '<span class="down">ㄇ</span>' : 
+                      (type === 'up' ? '<span class="up">V</span>' : '<span class="rest">×</span>');
+            
+            div.innerHTML = `
+                <div class="symbol">${sym}</div>
+                <div style="font-size:10px; color:#666;">${isDownPos ? (i/2+1) : '&'}</div>
+            `;
+            bar.appendChild(div);
+        }
+    }
+
+    document.getElementById('randomBtn').onclick = () => {
+        init();
+        document.getElementById('currentChord').innerText = chords[Math.floor(Math.random() * chords.length)];
+    };
+
+    document.getElementById('bpm').oninput = (e) => {
+        document.getElementById('bpmVal').innerText = e.target.value;
+        Tone.Transport.bpm.value = e.target.value;
+    };
+
+    document.getElementById('bgVol').oninput = (e) => {
+        bgMetronome.volume.value = e.target.value;
+    };
+
+    async function toggle() {
+        await Tone.start();
+        if (isPlaying) {
+            Tone.Transport.stop();
+            Tone.Transport.cancel();
+            document.querySelectorAll('.strum-unit').forEach(u => u.classList.remove('active'));
+            document.getElementById('playBtn').innerText = "START";
+            isPlaying = false;
+        } else {
+            Tone.Transport.cancel();
+            Tone.Transport.bpm.value = document.getElementById('bpm').value;
+
+            pattern.forEach((type, i) => {
+                let time = Tone.Time("8n") * i;
+
+                Tone.Transport.schedule((t) => {
+                    // 背景音 (每一拍都響)
+                    bgMetronome.triggerAttackRelease("32n", t);
+
+                    // 主刷奏音 (非休止符才響)
+                    if (type !== 'rest') {
+                        strumSound.triggerAttackRelease("16n", t);
+                    }
+
+                    // 視覺高亮
+                    Tone.Draw.schedule(() => {
+                        document.querySelectorAll('.strum-unit').forEach(u => u.classList.remove('active'));
+                        document.getElementById(`u-${i}`).classList.add('active');
+                    }, t);
+                }, time);
+            });
+
+            Tone.Transport.loop = true;
+            Tone.Transport.setLoopPoints(0, "1m"); 
+            Tone.Transport.start("+0.1");
+            document.getElementById('playBtn').innerText = "STOP";
+            isPlaying = true;
+        }
+    }
+
+    document.getElementById('playBtn').onclick = toggle;
+    init();
+</script>
+</body>
+</html>
