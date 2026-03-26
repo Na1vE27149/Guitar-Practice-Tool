@@ -3,241 +3,215 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Rhythm Lab - 簡譜滾動版</title>
+    <title>Rhythm Staff - 專業五線譜全組合</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
-        :root { --primary: #00E676; --accent: #FFD600; --bg: #121212; --text: #eee; --staff-bg: #1a1a1a; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; overflow-x: hidden; }
+        :root { --primary: #00E676; --accent: #FFD600; --bg: #121212; --text: #eee; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; overflow-x: hidden; }
         
-        /* 控制區 */
-        .controls { background: #222; padding: 12px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #333; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        .control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 14px; }
-        input[type="number"] { width: 45px; background: #000; color: #fff; border: 1px solid #444; padding: 4px; border-radius: 4px; text-align: center; }
-        input[type="range"] { width: 100%; accent-color: var(--primary); margin: 5px 0; }
-        .btn-group { display: flex; gap: 8px; }
-        button { flex: 1; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; font-size: 14px; transition: active 0.1s; }
-        button:active { transform: scale(0.98); opacity: 0.8; }
+        /* 頂部控制 */
+        .controls { background: #222; padding: 12px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #333; position: sticky; top: 0; z-index: 100; }
+        .btn-group { display: flex; gap: 8px; margin-top: 10px; }
+        button { flex: 1; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
         #playBtn { background: var(--primary); color: #000; }
         #randomBtn { background: #444; color: white; }
 
-        /* 樂譜與簡譜區共用樣式 */
-        .track-label { font-size: 12px; color: #888; margin: 10px 0 5px 5px; font-weight: bold; }
-        .scroll-container { width: 100%; overflow-x: auto; background: var(--staff-bg); border-y: 2px solid #333; white-space: nowrap; position: relative; -webkit-overflow-scrolling: touch; /* 優化 iOS 滾動 */ }
-        
-        /* 1. 圖形樂譜區 */
-        .staff-line { display: inline-flex; padding: 15px 0; }
-        .measure-segment { display: flex; flex-direction: column; align-items: center; width: 120px; border-right: 1px solid #333; position: relative; }
-        .measure-segment.is-first { border-left: 4px solid var(--accent); }
-        .beat-num { font-size: 9px; color: #555; position: absolute; top: -10px; left: 5px; }
-        .note-display { font-size: 1.8rem; height: 50px; line-height: 50px; color: #555; transition: color 0.1s; font-family: serif; }
-        
-        /* 2. 簡譜顯示區 */
-        #numberedStaff { height: 60px; border-bottom: 2px solid #333; }
-        .numbered-line { display: inline-flex; padding: 10px 0; height: 100%; align-items: center; }
-        .numbered-segment { display: inline-flex; align-items: center; justify-content: center; width: 120px; /* 與圖形區寬度一致 */ border-right: 1px solid #333; font-family: 'Courier New', Courier, monospace; font-size: 1.4rem; color: #666; letter-spacing: 2px; position: relative; box-sizing: border-box; }
-        
-        /* 簡譜修飾樣式 */
-        .numbered-segment u { text-decoration: underline; text-underline-offset: 3px; } /* 16分音符底線 */
-        .numbered-segment .triplet { font-size: 1.1rem; color: #aaa; } /* 三連音 */
+        /* 五線譜設計 */
+        .staff-scroll-container {
+            width: 100%;
+            overflow-x: auto;
+            background: #fff;
+            border-radius: 8px;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+        }
 
-        /* 播放高亮動畫 (圖形 + 簡譜) */
-        .active .note-display { color: var(--primary); text-shadow: 0 0 10px var(--primary); }
-        .active .numbered-segment { color: var(--primary); font-weight: bold; text-shadow: 0 0 5px var(--primary); background: rgba(0,230,118,0.05); }
-        
-        /* 第一拍高亮 */
-        .active.is-first .note-display { color: var(--accent); text-shadow: 0 0 15px var(--accent); }
-        .active.is-first .numbered-segment { color: var(--accent); text-shadow: 0 0 10px var(--accent); background: rgba(255,214,0,0.05); }
+        /* 譜號與拍號 (固定在最左邊) */
+        .staff-header {
+            background: #fff;
+            padding: 0 10px;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            font-family: serif;
+            font-size: 2.5rem;
+            border-right: 2px solid #000;
+            position: sticky;
+            left: 0;
+            z-index: 10;
+            /* 繪製背景線條 */
+            background-image: linear-gradient(#000 1px, transparent 1px);
+            background-size: 100% 8px;
+            background-repeat: repeat-x;
+            background-position: 0 45px;
+        }
 
-        select { background: #333; color: #eee; border: 1px solid #555; font-size: 10px; width: 90%; padding: 4px; border-radius: 4px; margin-top: 5px; }
+        .staff-wrapper {
+            display: inline-flex;
+            height: 120px;
+            background-image: linear-gradient(#000 1px, transparent 1px);
+            background-size: 100% 8px;
+            background-repeat: repeat-x;
+            background-position: 0 45px;
+        }
+
+        .staff-beat {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            width: 140px;
+            border-right: 1px solid #eee;
+            position: relative;
+            transition: background 0.1s;
+        }
+
+        .staff-note-view {
+            font-size: 3.2rem;
+            height: 80px;
+            line-height: 85px; /* 調整讓符頭壓線 */
+            color: #000;
+            font-family: serif;
+            margin-top: 5px;
+        }
+
+        /* 播放狀態 */
+        .staff-beat.active { background-color: rgba(0, 230, 118, 0.2); }
+        .staff-beat.is-first { border-left: 2px solid #000; }
+
+        select { 
+            background: #eee; color: #000; border: 1px solid #ccc; 
+            font-size: 10px; width: 90%; padding: 3px; border-radius: 4px; margin-bottom: 5px;
+        }
+        .label { font-size: 9px; color: #999; margin-top: 5px; }
     </style>
 </head>
 <body>
 
 <div class="controls">
-    <div class="control-row">
-        <span>BPM <input type="number" id="bpm" value="80" min="40" max="200"></span>
-        <label><input type="checkbox" id="bgDrum" checked> 背景8分音符</label>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span>BPM <input type="number" id="bpm" value="80" style="width:50px;"></span>
+        <label><input type="checkbox" id="bgDrum" checked> 背景8分</label>
     </div>
-    <input type="range" id="bgVolume" min="-50" max="-10" value="-30">
     <div class="btn-group">
-        <button id="randomBtn">全部隨機</button>
-        <button id="playBtn">PLAY</button>
+        <button id="randomBtn">隨機組合</button>
+        <button id="playBtn">START</button>
     </div>
 </div>
 
-<div class="track-label">圖形樂譜 (Graphic Staff)</div>
-<div id="graphicStaff" class="scroll-container">
-    <div id="staffLine" class="staff-line"></div>
-</div>
-
-<div class="track-label">簡譜軌道 (Numbered Staff)</div>
-<div id="numberedStaff" class="scroll-container">
-    <div id="numberedLine" class="numbered-line"></div>
+<div id="mainScroll" class="staff-scroll-container">
+    <div class="staff-header">
+        <div>∮<br><small style="font-size:1.2rem; display:block; margin-top:-10px;"><b>4<br>4</b></small></div>
+    </div>
+    <div id="staffWrapper" class="staff-wrapper"></div>
 </div>
 
 <script>
-    // 音色
     const mainSynth = new Tone.MembraneSynth().toDestination();
-    const hihat = new Tone.MetalSynth({ envelope: { decay: 0.05 }, volume: -30 }).toDestination();
+    const hihat = new Tone.MetalSynth({ envelope: { decay: 0.05 }, volume: -25 }).toDestination();
 
-    // 節奏組合庫 (新增 numbered 屬性定義簡譜)
+    // 把剛才消失的 16 分組合通通抓回來！
     const patterns = [
-        { id: '4n', name: '四分音符', icon: '♩', numbered: '1', notes: ['4n'] },
-        { id: '8n2', name: '八分音符x2', icon: '♫', numbered: '1 1', notes: ['8n', '8n'] },
-        { id: '16n4', name: '16分x4', icon: '♬♬', numbered: '<u>1111</u>', notes: ['16n', '16n', '16n', '16n'] },
-        // 16分切分
-        { id: '16_16_8', name: '前快後慢', icon: '♬𝅘𝅥𝅮', numbered: '<u>11</u>1', notes: ['16n', '16n', '8n'] },
-        { id: '8_16_16', name: '前慢後快', icon: '𝅘𝅥𝅮♬', numbered: '1<u>11</u>', notes: ['8n', '16n', '16n'] },
-        { id: '16_8_16', name: '中切分', icon: '𝅘𝅥𝅮𝅘𝅥𝅘𝅥𝅮', numbered: '<u>1</u>1<u>1</u>', notes: ['16n', '8n', '16n'] },
+        { id: '4n', name: '四分音符 (1)', icon: '♩', notes: ['4n'] },
+        { id: '8n2', name: '八分x2 (1-3)', icon: '♫', notes: ['8n', '8n'] },
+        { id: '16n4', name: '16分x4 (1-2-3-4)', icon: '♬♬', notes: ['16n', '16n', '16n', '16n'] },
+        // 切分與組合
+        { id: '16_16_8', name: '前快後慢 (1-2-3)', icon: '♬𝅘𝅥𝅮', notes: ['16n', '16n', '8n'] },
+        { id: '8_16_16', name: '前慢後快 (1-3-4)', icon: '𝅘𝅥𝅮♬', notes: ['8n', '16n', '16n'] },
+        { id: '16_8_16', name: '中切分 (1-2-4)', icon: '𝅘𝅥𝅮𝅘𝅥𝅘𝅥𝅮', notes: ['16n', '8n', '16n'] },
         // 附點
-        { id: 'dot8_16', name: '前附點', icon: '𝅘𝅥. 𝅘𝅥𝅮', numbered: '1.<u>1</u>', notes: ['8n.', '16n'] },
-        { id: '16_dot8', name: '後附點', icon: '𝅘𝅥𝅮 𝅘𝅥.', numbered: '<u>1</u>1.', notes: ['16n', '8n.'] },
-        // 單點
-        { id: '16_rest', name: '單點(第2點)', icon: '· 𝅘𝅥𝅮 · ·', numbered: '0<u>1</u>00', notes: [null, '16n', '16n', '8n'] },
-        { id: 'rest_16', name: '單點(第4點)', icon: '· · · 𝅘𝅥𝅮', numbered: '000<u>1</u>', notes: ['8n', '16n', '16n'] },
+        { id: 'dot8_16', name: '前附點 (1...4)', icon: '♩.𝅘𝅥𝅮', notes: ['8n.', '16n'] },
+        { id: '16_dot8', name: '後附點 (1-2...)', icon: '𝅘𝅥𝅮.♩', notes: ['16n', '8n.'] },
+        // 單點挑戰
+        { id: '16_2', name: '只打第2點', icon: '·𝅘𝅥𝅮··', notes: [null, '16n', '16n', '8n'] },
+        { id: '16_4', name: '只打第4點', icon: '···𝅘𝅥𝅮', notes: ['8n', '16n', '16n'] },
         // 特殊
-        { id: '3t', name: '三連音', icon: '𝅘𝅥𝅮𝅘𝅥𝅮𝅘𝅥𝅮', numbered: '<span class="triplet">(111)</span>', notes: ['8t', '8t', '8t'] },
-        { id: 'rest', name: '休止符', icon: '𝄽', numbered: '0', notes: [] }
+        { id: '3t', name: '三連音', icon: '𝅘𝅥𝅮𝅘𝅥𝅮𝅘𝅥𝅮', notes: ['8t', '8t', '8t'] },
+        { id: 'rest', name: '全拍休止', icon: '𝄽', notes: [] }
     ];
 
     let isPlaying = false;
-    const SEG_WIDTH = 120; // 每一拍的固定寬度 (pixel)
-
-    // 初始化 8 拍介面 (雙軌道)
-    const staffLine = document.getElementById('staffLine');
-    const numberedLine = document.getElementById('numberedLine');
+    const wrapper = document.getElementById('staffWrapper');
 
     for (let i = 0; i < 8; i++) {
-        const isFirst = (i === 0);
-        
-        // 1. 建立圖形拍子區
-        const seg = document.createElement('div');
-        seg.className = 'measure-segment' + (isFirst ? ' is-first' : '');
-        seg.id = `seg-${i}`;
-        seg.innerHTML = `<div class="beat-num">${isFirst?'DOWN':'B'+(i+1)}</div><div class="note-display" id="view-${i}"></div><select id="sel-${i}"></select>`;
-        staffLine.appendChild(seg);
-
-        // 2. 建立簡譜拍子區
-        const numSeg = document.createElement('div');
-        numSeg.className = 'numbered-segment' + (isFirst ? ' is-first' : '');
-        numSeg.id = `numseg-${i}`;
-        // 簡譜區不需要 select，由圖形區連動
-        numberedLine.appendChild(numSeg);
-
-        // 設定下拉選單
+        const beat = document.createElement('div');
+        beat.className = 'staff-beat' + (i % 4 === 0 ? ' is-first' : '');
+        beat.id = `beat-${i}`;
+        beat.innerHTML = `<div class="label">${i===0?'拍1':'拍'+(i+1)}</div><div class="staff-note-view" id="view-${i}"></div><select id="sel-${i}"></select>`;
+        wrapper.appendChild(beat);
         const sel = document.getElementById(`sel-${i}`);
         patterns.forEach(p => {
             const opt = document.createElement('option');
-            opt.value = p.id;
-            opt.innerText = p.name;
-            sel.appendChild(opt);
+            opt.value = p.id; opt.innerText = p.name; sel.appendChild(opt);
         });
-        sel.onchange = () => updateAllDisplays(i);
+        sel.onchange = () => updateView(i);
     }
 
-    // 更新所有顯示 (圖形 + 簡譜)
-    function updateAllDisplays(index) {
-        const val = document.getElementById(`sel-${index}`).value;
-        const pattern = patterns.find(x => x.id === val);
-        document.getElementById(`view-${index}`).innerText = pattern.icon;
-        document.getElementById(`numseg-${index}`).innerHTML = pattern.numbered;
+    function updateView(index) {
+        const p = patterns.find(x => x.id === document.getElementById(`sel-${index}`).value);
+        document.getElementById(`view-${index}`).innerText = p.icon;
     }
-
-    // 自動捲動函式
-    function autoScrollToBeat(beatIndex) {
-        const containers = [document.getElementById('graphicStaff'), document.getElementById('numberedStaff')];
-        const targetX = beatIndex * SEG_WIDTH; // 計算目標 X 座標
-        
-        containers.forEach(container => {
-            // 使用 scrollTo 進行平滑捲動，將目標拍子移到左側靠邊（手機上最容易看）
-            container.scrollTo({
-                left: targetX,
-                behavior: 'smooth' // 平滑效果對手機很重要
-            });
-        });
-    }
-
-    // 介面連動設定
-    document.getElementById('bgVolume').oninput = (e) => hihat.volume.value = e.target.value;
 
     document.getElementById('randomBtn').onclick = () => {
         for (let i = 0; i < 8; i++) {
             document.getElementById(`sel-${i}`).value = patterns[Math.floor(Math.random() * patterns.length)].id;
-            updateAllDisplays(i);
+            updateView(i);
         }
     };
 
-    // 播放邏輯
     async function togglePlay() {
         await Tone.start();
         if (isPlaying) {
-            Tone.Transport.stop();
-            Tone.Transport.cancel();
-            // 清除高亮
-            document.querySelectorAll('.measure-segment, .numbered-segment').forEach(s => s.classList.remove('active'));
-            document.getElementById('playBtn').innerText = "PLAY";
-            document.getElementById('playBtn').style.background = "var(--primary)";
+            Tone.Transport.stop(); Tone.Transport.cancel();
+            document.querySelectorAll('.staff-beat').forEach(b => b.classList.remove('active'));
+            document.getElementById('playBtn').innerText = "START";
             isPlaying = false;
         } else {
             Tone.Transport.bpm.value = document.getElementById('bpm').value;
             let timeCursor = 0;
-
             for (let i = 0; i < 8; i++) {
                 const p = patterns.find(x => x.id === document.getElementById(`sel-${i}`).value);
                 const start = timeCursor;
                 const pitch = (i === 0) ? "C3" : "C2";
 
-                // 時間同步排程：視覺高亮 + 自動滾動
                 Tone.Transport.schedule((time) => {
                     Tone.Draw.schedule(() => {
-                        // 1. 高亮當前拍子 (雙軌)
-                        document.querySelectorAll('.measure-segment, .numbered-segment').forEach(s => s.classList.remove('active'));
-                        document.getElementById(`seg-${i}`).classList.add('active');
-                        document.getElementById(`numseg-${i}`).parentElement.parentElement.classList.add('active'); // 簡譜區高亮
-                        // 修正簡譜高亮邏輯
-                        document.getElementById(`numseg-${i}`).parentElement.parentElement.querySelectorAll('.numbered-segment').forEach(s=>s.classList.remove('active'));
-                        document.getElementById(`numseg-${i}`).classList.add('active');
-
-                        // 2. 觸發自動捲動
-                        autoScrollToBeat(i);
+                        document.querySelectorAll('.staff-beat').forEach(b => b.classList.remove('active'));
+                        document.getElementById(`beat-${i}`).classList.add('active');
+                        document.getElementById('mainScroll').scrollTo({ left: i * 140, behavior: 'smooth' });
                     }, time);
                 }, start);
 
-                // 背景鼓點
                 if (document.getElementById('bgDrum').checked) {
                     Tone.Transport.schedule((t) => hihat.triggerAttackRelease("32n", t), start);
                     Tone.Transport.schedule((t) => hihat.triggerAttackRelease("32n", t), start + Tone.Time('8n').toSeconds());
                 }
 
-                // 主節奏聲音 (精確處理休止與單點)
                 if (p.id === 'rest') {
                     timeCursor += Tone.Time('4n').toSeconds();
-                } else if (p.id === '16_rest') {
+                } else if (p.id === '16_2') {
                     timeCursor += Tone.Time('16n').toSeconds();
                     Tone.Transport.schedule((t) => mainSynth.triggerAttackRelease(pitch, "32n", t), timeCursor);
-                    timeCursor += Tone.Time('16n').toSeconds() + Tone.Time('8n').toSeconds();
-                } else if (p.id === 'rest_16') {
-                    timeCursor += Tone.Time('8n.');
+                    timeCursor += Tone.Time('8n.').toSeconds();
+                } else if (p.id === '16_4') {
+                    timeCursor += Tone.Time('8n.').toSeconds();
                     Tone.Transport.schedule((t) => mainSynth.triggerAttackRelease(pitch, "32n", t), timeCursor);
                     timeCursor += Tone.Time('16n').toSeconds();
                 } else {
-                    p.notes.forEach((note, idx) => {
+                    p.notes.forEach((n, idx) => {
                         Tone.Transport.schedule((t) => mainSynth.triggerAttackRelease((idx===0?pitch:"C2"), "32n", t), timeCursor);
-                        timeCursor += Tone.Time(note).toSeconds();
+                        timeCursor += Tone.Time(n).toSeconds();
                     });
                 }
             }
-            Tone.Transport.loop = true;
-            Tone.Transport.loopEnd = timeCursor;
-            Tone.Transport.start();
+            Tone.Transport.loop = true; Tone.Transport.loopEnd = timeCursor; Tone.Transport.start();
             document.getElementById('playBtn').innerText = "STOP";
-            document.getElementById('playBtn').style.background = "#FF5252";
             isPlaying = true;
         }
     }
 
     document.getElementById('playBtn').onclick = togglePlay;
-    document.getElementById('randomBtn').click(); // 初始載入
+    document.getElementById('randomBtn').click();
 </script>
 </body>
 </html>
